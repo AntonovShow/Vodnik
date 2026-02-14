@@ -1,21 +1,17 @@
-import os
 import sqlite3
 import threading
 import time
 import logging
 from telebot import TeleBot, types
+import bot_logging
+import var
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Конфигурация (задайте свои значения через переменные окружения или прямо в коде)
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-GROUP_ID = os.getenv('TELEGRAM_GROUP_ID')  # ID группы, где бот будет обрабатывать команды
-
-if not TOKEN:
-    raise ValueError("Не задан TELEGRAM_BOT_TOKEN")
-if not GROUP_ID:
-    raise ValueError("Не задан TELEGRAM_GROUP_ID")
+TOKEN = var.TOKEN
+GROUP_ID = var.GROUP_ID  # ID группы, где бот будет обрабатывать команды
 
 bot = TeleBot(TOKEN)
 
@@ -33,8 +29,44 @@ broadcast_data = {}
 # Словарь для сигналов остановки рассылки (по id инициатора)
 stop_events = {}
 
+# Хранилище связей: (id_целевого_чата, id_сообщения_бота) → id_пользователя
+message_owner = {}
+
+@bot.message_handler(func=lambda message: message.chat.type == 'private' and not message.from_user.is_bot)
+def handle_private(message):
+    """Копирует любое сообщение из лички в целевой чат и запоминает отправителя."""
+    try:
+        bot.forward_message(GROUP_ID, message.chat.id, message.message_id)
+        sent = bot.copy_message(
+            chat_id=GROUP_ID,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id
+        )
+        # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
+        message_owner[(GROUP_ID, sent.message_id)] = message.from_user.id
+    except Exception as e:
+        bot.reply_to(message, f"Не удалось переслать сообщение: {e}")
+
+@bot.message_handler(func=lambda message: message.chat.id == GROUP_ID and not message.from_user.is_bot)
+def handle_target_chat(message):
+    handle_group_message(message)
+    """Обрабатывает ответы на сообщения бота в целевом чате и пересылает их исходному пользователю."""
+    if message.reply_to_message:
+        key = (GROUP_ID, message.reply_to_message.message_id)
+        if key in message_owner:
+            user_id = message_owner[key]
+            try:
+                bot.copy_message(
+                    chat_id=user_id,
+                    from_chat_id=message.chat.id,
+                    message_id=message.message_id
+                )
+            except Exception as e:
+                bot_logging.log_to_telegram(f"Не удалось отправить ответ пользователю: {e}")
+        # Если ответ не на сообщение бота — игнорируем
+
 # ================== Работа с базой данных ==================
-DB_PATH = 'user_list.db'  # путь к файлу базы данных
+DB_PATH = var.DB_PATH  # путь к файлу базы данных
 
 def get_db_connection():
     """Возвращает соединение с БД."""
@@ -44,23 +76,8 @@ def get_db_connection():
 
 def init_db():
     """Создаёт таблицу user_list, если её нет (для полноты)."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_list (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            uid INTEGER,
-            chat INTEGER,
-            f_name TEXT,
-            s_name TEXT,
-            u_name TEXT,
-            addr TEXT,
-            comment TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-    logging.info("База данных инициализирована")
+    query = 'CREATE TABLE IF NOT EXISTS user_list (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, chat INTEGER, f_name TEXT, s_name TEXT, username TEXT, addr TEXT, comment TEXT)'
+    bot_logging.run_query_and_log(query)
 
 def get_users_by_addr(addr_list):
     """
@@ -69,7 +86,7 @@ def get_users_by_addr(addr_list):
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if 'all' in addr_list:
         cursor.execute("SELECT chat FROM user_list WHERE chat IS NOT NULL")
     else:
@@ -96,7 +113,7 @@ def send_broadcast(sender_id, targets, text):
         # Получаем список получателей
         recipients = get_users_by_addr(targets)
         total = len(recipients)
-        logging.info(f"Начало рассылки для {total} пользователей (цели: {targets})")
+        bot_logging.log_to_telegram(f"Начало рассылки для {total} пользователей (цели: {targets})")
 
         if total == 0:
             bot.send_message(GROUP_ID, "⚠️ Нет пользователей для рассылки.")
@@ -107,16 +124,15 @@ def send_broadcast(sender_id, targets, text):
 
         for i, chat_id in enumerate(recipients):
             if stop_event.is_set():
-                logging.info(f"Рассылка остановлена пользователем {sender_id}")
+                bot_logging.log_to_telegram(f"Рассылка остановлена пользователем {sender_id}")
                 bot.send_message(GROUP_ID, f"⏹️ Рассылка остановлена. Отправлено {sent} из {total}.")
                 return
-
             try:
-                bot.send_message(chat_id, f"📢 Сообщение от координаторов:\n\n{text}")
+                bot.send_message(chat_id, text)
                 sent += 1
             except Exception as e:
                 failed += 1
-                logging.error(f"Ошибка отправки пользователю {chat_id}: {e}")
+                bot_logging.log_to_telegram(f"Ошибка отправки пользователю {chat_id}: {e}")
 
             # Ограничение: 5 сообщений в секунду
             if (i + 1) % 5 == 0:
@@ -124,17 +140,18 @@ def send_broadcast(sender_id, targets, text):
 
         # Итог
         bot.send_message(GROUP_ID, f"✅ Рассылка завершена. Успешно: {sent}, ошибок: {failed}.")
-        logging.info(f"Рассылка завершена. Успешно: {sent}, ошибок: {failed}")
+        bot_logging.log_to_telegram(f"Рассылка завершена. Успешно: {sent}, ошибок: {failed}")
 
     except Exception as e:
         logging.error(f"Ошибка в процессе рассылки: {e}")
+        bot_logging.log_to_telegram(f"Ошибка в процессе рассылки: {e}")
         bot.send_message(GROUP_ID, f"❌ Ошибка при рассылке: {e}")
     finally:
         if sender_id in stop_events:
             del stop_events[sender_id]
 
 # ================== Обработчики сообщений в группе ==================
-@bot.message_handler(func=lambda message: str(message.chat.id) == GROUP_ID)
+#@bot.message_handler(func=lambda message: message.chat.id == GROUP_ID)
 def handle_group_message(message):
     global BOT_USERNAME
     if BOT_USERNAME is None:
@@ -190,7 +207,7 @@ def handle_group_message(message):
 
         target_desc = [('всех' if t == 'all' else t) for t in targets]
         bot.reply_to(message, f"✅ Принято. Теперь отправьте текст для рассылки (следующим сообщением).\nЦелевая аудитория: {', '.join(target_desc)}")
-        logging.info(f"Пользователь {message.from_user.id} инициировал рассылку для {targets}")
+        bot_logging.log_to_telegram(f"Пользователь {message.from_user.first_name} {message.from_user.last_name} @{message.from_user.username} инициировал рассылку для {targets}")
 
     # 2. Если пользователь в состоянии ожидания текста
     elif message.from_user.id in broadcast_data and broadcast_data[message.from_user.id]['step'] == 'waiting_text':
@@ -256,9 +273,9 @@ if __name__ == '__main__':
     try:
         me = bot.get_me()
         BOT_USERNAME = me.username
-        logging.info(f"Бот @{BOT_USERNAME} запущен, группа: {GROUP_ID}")
+        bot_logging.log_to_telegram(f"Бот @{BOT_USERNAME} запущен, группа: {GROUP_ID}")
     except Exception as e:
-        logging.error(f"Ошибка подключения: {e}")
+        bot_logging.log_to_telegram(f"Ошибка подключения: {e}")
         exit(1)
 
     bot.infinity_polling()
