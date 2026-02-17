@@ -2,11 +2,12 @@ import logging
 import sqlite3
 from datetime import datetime
 import telebot
+import var
 
 # ===== Конфигурация =====
-TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN'
-LOG_CHAT_ID = '@your_channel_or_group_id'  # например, '123456789' или '@mychannel'
-DB_PATH = 'app_data.db'
+TELEGRAM_BOT_TOKEN = var.TOKEN
+LOG_CHAT_ID = var.LOG_GROUP_ID
+DB_PATH = var.DB_PATH
 
 # Создаем телеграм-бота
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
@@ -97,4 +98,5 @@ if __name__ == '__main__':
     # Пример: выборка
     rows = run_query_and_log("SELECT * FROM logs_example")
     print("Query rows:", rows)
+
 """
