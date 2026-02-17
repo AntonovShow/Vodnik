@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Конфигурация (задайте свои значения через переменные окружения или прямо в коде)
 TOKEN = var.TOKEN
 GROUP_ID = var.GROUP_ID  # ID группы, где бот будет обрабатывать команды
+DB_PATH = var.DB_PATH  # путь к файлу базы данных
 
 bot = TeleBot(TOKEN)
 
@@ -66,8 +67,6 @@ def handle_target_chat(message):
         # Если ответ не на сообщение бота — игнорируем
 
 # ================== Работа с базой данных ==================
-DB_PATH = var.DB_PATH  # путь к файлу базы данных
-
 def get_db_connection():
     """Возвращает соединение с БД."""
     conn = sqlite3.connect(DB_PATH)
