@@ -53,11 +53,9 @@ def yes_no_keyboard():
 
 def location_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(
-        types.KeyboardButton(var.ADDR1),
-        types.KeyboardButton(var.ADDR2),
-        types.KeyboardButton(var.ADDR3)
-    )
+    markup.row(types.KeyboardButton(var.ADDR1))
+    markup.row(types.KeyboardButton(var.ADDR2))
+    markup.row(types.KeyboardButton(var.ADDR3))
     return markup
 
 def nn_actions_keyboard():
