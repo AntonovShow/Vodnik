@@ -92,9 +92,7 @@ def handle_start(message):
     user_state[chat_id] = {'step': 'waiting_help'}
     bot.send_message(
         chat_id,
-        f"Привет, {message.from_user.first_name}! 👋\n\n"
-        "Я бот для защиты стадиона «Водник» в Нижнем Новгороде от застройки.\n\n"
-        "Хотите помочь в защите стадиона?",
+        f"Привет, {message.from_user.first_name}! 👋\n\n{var.START}",
         reply_markup=yes_no_keyboard()
     )
     bot_logging.log_to_telegram(f"Пользователь {chat_id} начал диалог.")
@@ -504,7 +502,7 @@ def handle_group_message(message):
                                    f"Получатели: {', '.join([('всех' if t=='all' else t) for t in state['targets']])}\n\n"
                                    f"Ответьте на это сообщение «верно» для начала рассылки или «стоп» для отмены.")
         state['last_message_id'] = confirm_msg.message_id
-        logging.info(f"Пользователь {message.from_user.id} отправил текст, ожидается подтверждение")
+        bot_logging.log_to_telegram(f"Пользователь {message.from_user.id} отправил текст, ожидается подтверждение")
 
     # 3. Обработка ответов на сообщение с подтверждением
     elif message.reply_to_message and message.reply_to_message.from_user.id == bot.get_me().id:
