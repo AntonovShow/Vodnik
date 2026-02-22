@@ -310,14 +310,13 @@ def _get_actions_keyboard(location):
 def handle_private(message):
     """Копирует любое сообщение из лички в целевой чат и запоминает отправителя."""
     try:
-        bot.forward_message(GROUP_ID, message.chat.id, message.message_id)
         sent = bot.copy_message(
             chat_id=GROUP_ID,
             from_chat_id=message.chat.id,
             message_id=message.message_id
         )
         if message.from_user.username:
-            bot.send_message(GROUP_ID, f"Сообщение от пользователя {message.from_user.username}", reply_to_message_id=sent.message_id)
+            bot.send_message(GROUP_ID, f"Сообщение от пользователя @{message.from_user.username}", reply_to_message_id=sent.message_id)
         else: bot.send_message(GROUP_ID, f"Сообщение от пользователя {message.from_user.first_name} {message.from_user.first_name}", reply_to_message_id=sent.message_id)
         # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
         message_owner[(GROUP_ID, sent.message_id)] = message.from_user.id
