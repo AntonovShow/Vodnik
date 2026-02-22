@@ -316,10 +316,13 @@ def handle_private(message):
             from_chat_id=message.chat.id,
             message_id=message.message_id
         )
+        if message.from_user.username:
+            bot.send_message(GROUP_ID, f"Сообщение от пользователя {message.from_user.username}", reply_to_message_id=sent.message_id)
+        else: bot.send_message(GROUP_ID, f"Сообщение от пользователя {message.from_user.first_name} {message.from_user.first_name}", reply_to_message_id=sent.message_id)
         # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
         message_owner[(GROUP_ID, sent.message_id)] = message.from_user.id
     except Exception as e:
-        bot.reply_to(message, f"Не удалось переслать сообщение: {e}")
+        bot_logging.log_to_telegram(message, f"Не удалось переслать сообщение: {e}")
     handle_all_messages(message)
 
 @bot.message_handler(func=lambda message: message.chat.id == GROUP_ID and not message.from_user.is_bot)
