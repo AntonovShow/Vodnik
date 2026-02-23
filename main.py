@@ -2,8 +2,6 @@ import sqlite3
 import threading
 import time
 import logging
-from asyncio.windows_events import NULL
-
 from telebot import TeleBot, types
 import bot_logging
 import var
@@ -21,16 +19,13 @@ bot = TeleBot(TOKEN)
 BOT_USERNAME = None
 
 #ID темы в телеграм группе
-THREAD_ID = NULL
 def find_thread (chat):
-    global THREAD_ID
     row = bot_logging.run_query_and_log("SELECT uid FROM user_list WHERE chat='%s'" % chat)
-    if not row == NULL:
-        THREAD_ID = row
-        bot_logging.log_to_telegram(f"{row}")
-        return row
+    if not row == None:
+        bot_logging.log_to_telegram(f"{row[0]}")
+        return row[0]
     else:
-        return True
+        return False
 
 
 # Словарь для хранения состояний рассылки по пользователям группы
@@ -51,9 +46,8 @@ message_owner = {}
 def thread_user(chat_id, first_name, last_name, username):
     """Создает тред, если еще не создан, и записывает его ID в базу данных"""
     save_user(chat_id, first_name, last_name, username)
-    global THREAD_ID
     thread_name = f"@{username} {first_name} {last_name}"
-    if find_thread (chat_id):
+    if not find_thread (chat_id):
         try:
             created_topic: types.ForumTopic = bot.create_forum_topic(chat_id=var.GROUP_ID, name=thread_name)
             THREAD_ID = created_topic.message_thread_id
@@ -352,26 +346,19 @@ def _get_actions_keyboard(location):
 @bot.message_handler(func=lambda message: message.chat.type == 'private' and not message.from_user.is_bot)
 def handle_private(message):
     """Копирует любое сообщение из лички в целевой чат и запоминает отправителя."""
-    global THREAD_ID
+    thread_id = find_thread(message.chat.id)
     try:
-        bot_logging.log_to_telegram(f"{THREAD_ID}")
         sent = bot.copy_message(
             chat_id=GROUP_ID,
             from_chat_id=message.chat.id,
             message_id=message.message_id,
-            message_thread_id=find_thread (message.chat.id)
+            message_thread_id=thread_id
         )
-        """if message.from_user.username:
-            bot.send_message(GROUP_ID, f"Сообщение от пользователя @{message.from_user.username}",
-                             reply_to_message_id=sent.message_id, message_thread_id=THREAD_ID)
-        else:
-            bot.send_message(GROUP_ID,
-                             f"Сообщение от пользователя {message.from_user.first_name} {message.from_user.first_name}",
-                             reply_to_message_id=sent.message_id, message_thread_id=THREAD_ID)"""
-        # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
+      # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
         message_owner[(GROUP_ID, sent.message_id)] = message.from_user.id
     except Exception as e:
-        bot_logging.log_to_telegram(message, f"Не удалось переслать сообщение: {e}")
+        #bot_logging.log_to_telegram(message, f"Не удалось переслать сообщение: {e}")
+        logging.exception(f"Все пошло прахом, ничего не выйдет")
     handle_all_messages(message)
 
 
