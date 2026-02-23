@@ -82,16 +82,10 @@ def run_query_and_log(sql_query: str, params: tuple = ()):
             pass
 
 # ===== Пример использования =====
-if __name__ == '__main__':
+"""if __name__ == '__main__':
     # Пример: создание таблицы
-    run_query_and_log("""
-        CREATE TABLE IF NOT EXISTS logs_example (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            message TEXT NOT NULL,
-            ts DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-"""
+    run_query_and_log("CREATE TABLE IF NOT EXISTS logs_example (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT NOT NULL, ts DATETIME DEFAULT CURRENT_TIMESTAMP)")
+
     # Пример: вставка
     run_query_and_log("INSERT INTO logs_example (message) VALUES (?)", ("Пример сообщения",))
 

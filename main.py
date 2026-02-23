@@ -21,7 +21,17 @@ bot = TeleBot(TOKEN)
 BOT_USERNAME = None
 
 #ID темы в телеграм группе
-THREAD_ID = None
+THREAD_ID = NULL
+def find_thread (chat):
+    global THREAD_ID
+    row = bot_logging.run_query_and_log("SELECT uid FROM user_list WHERE chat='%s'" % chat)
+    if not row == NULL:
+        THREAD_ID = row
+        bot_logging.log_to_telegram(f"{row}")
+        return row
+    else:
+        return True
+
 
 # Словарь для хранения состояний рассылки по пользователям группы
 # Ключ: id пользователя в группе, значение: dict с полями:
@@ -42,13 +52,12 @@ def thread_user(chat_id, first_name, last_name, username):
     """Создает тред, если еще не создан, и записывает его ID в базу данных"""
     save_user(chat_id, first_name, last_name, username)
     global THREAD_ID
-    thread_name = f"{username} {first_name} {last_name}"
-    row = bot_logging.run_query_and_log("SELECT uid FROM user_list WHERE chat=?", chat_id)
-    if not row:
+    thread_name = f"@{username} {first_name} {last_name}"
+    if find_thread (chat_id):
         try:
             created_topic: types.ForumTopic = bot.create_forum_topic(chat_id=var.GROUP_ID, name=thread_name)
             THREAD_ID = created_topic.message_thread_id
-            bot_logging.run_query_and_log("INSERT INTO user_list (uid) VALUES (?) WHERE chat=?", (THREAD_ID, chat_id))
+            bot_logging.run_query_and_log("UPDATE user_list SET uid='%s' WHERE chat='%s'" % (THREAD_ID, chat_id))
         except Exception as e:
             bot_logging.log_to_telegram(f"Не удалось создать тему '{thread_name}' в группе: {e}")
 
@@ -343,19 +352,22 @@ def _get_actions_keyboard(location):
 @bot.message_handler(func=lambda message: message.chat.type == 'private' and not message.from_user.is_bot)
 def handle_private(message):
     """Копирует любое сообщение из лички в целевой чат и запоминает отправителя."""
+    global THREAD_ID
     try:
+        bot_logging.log_to_telegram(f"{THREAD_ID}")
         sent = bot.copy_message(
             chat_id=GROUP_ID,
             from_chat_id=message.chat.id,
-            message_id=message.message_id
+            message_id=message.message_id,
+            message_thread_id=find_thread (message.chat.id)
         )
-        if message.from_user.username:
+        """if message.from_user.username:
             bot.send_message(GROUP_ID, f"Сообщение от пользователя @{message.from_user.username}",
-                             reply_to_message_id=sent.message_id)
+                             reply_to_message_id=sent.message_id, message_thread_id=THREAD_ID)
         else:
             bot.send_message(GROUP_ID,
                              f"Сообщение от пользователя {message.from_user.first_name} {message.from_user.first_name}",
-                             reply_to_message_id=sent.message_id)
+                             reply_to_message_id=sent.message_id, message_thread_id=THREAD_ID)"""
         # Сохраняем, что это сообщение в целевом чате принадлежит данному пользователю
         message_owner[(GROUP_ID, sent.message_id)] = message.from_user.id
     except Exception as e:
