@@ -22,7 +22,6 @@ BOT_USERNAME = None
 def find_thread (chat):
     row = bot_logging.run_query_and_log("SELECT uid FROM user_list WHERE chat='%s'" % chat)
     if not row == None:
-        bot_logging.log_to_telegram(f"{row[0]}")
         return row[0]
     else:
         return False
