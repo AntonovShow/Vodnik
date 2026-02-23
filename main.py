@@ -20,12 +20,11 @@ BOT_USERNAME = None
 
 #ID темы в телеграм группе
 def find_thread (chat):
-    row = bot_logging.run_query_and_log("SELECT uid FROM user_list WHERE chat='%s'" % chat)
-    if not row == None:
-        return row[0]
-    else:
-        return False
-
+    conn = sqlite3.connect(var.DB_PATH)
+    cur = conn.cursor ()
+    cur.execute ("SELECT uid FROM user_list WHERE chat='%s'" % chat)
+    row = cur.fetchone()
+    return row[0] if row else False
 
 # Словарь для хранения состояний рассылки по пользователям группы
 # Ключ: id пользователя в группе, значение: dict с полями:
